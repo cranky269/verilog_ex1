@@ -90,48 +90,33 @@ T_{\mathrm{high}} = T_{\mathrm{low}}
 当输入时钟占空比为 $50\%$ 时，相邻上升沿与下降沿之间
 恰好相隔半个输入时钟周期。
 
-可以将最终输出拆分为两个信号 $A$、$B$ 的或运算。
-其中，$B$ 相对于 $A$ 延迟半个输入时钟周期。
+讲义采用两个分别在下降沿和上升沿计数的分频支路，
+对应代码中的 \texttt{cnt\_1}、\texttt{cnt\_2} 及
+\texttt{clk\_out1}、\texttt{clk\_out2}。
 
-以 5 分频为例的波形组合，以输入时钟周期为时间单位，其高电平区间如下：
-
-\begin{table}[H]
-  \centering
-  \caption{5 分频的高电平区间组合}
-  \begin{tabular}{cc}
-    \toprule
-    信号 & 高电平区间 \\
-    \midrule
-    $A$ & $0 \sim 2$ 拍 \\
-    $B$ & $0.5 \sim 2.5$ 拍 \\
-    $A \lor B$ & $0 \sim 2.5$ 拍 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-两个信号的高电平区间在中间部分重叠，
-只在起始与结束处各相差半拍。
-通过或运算，合成信号的高电平持续时间为
+对奇数分频系数 $N$，每个支路的低电平持续
+$\frac{N+1}{2}$ 个输入周期，高电平持续
+$\frac{N-1}{2}$ 个输入周期，两支路相位相差半个输入周期。
+从零开始计数时，低电平翻转条件为
 \[
-T_{\mathrm{high}} = \frac{N}{2}T_{\mathrm{in}}.
+\texttt{cnt} = \lfloor N/2 \rfloor,
+\]
+高电平翻转条件为
+\[
+\texttt{cnt} = \lfloor N/2 \rfloor - 1.
 \]
 
-合成输出可以表示为
+对于 $N=5$，各支路分别低电平3拍、高电平2拍，
+两路取或将高电平区间扩展为2.5拍，低电平也为2.5拍，
+因此输出周期为5拍、占空比为50\%。
 \[
-\boxed{\texttt{clk\_out} = A \lor B}
+\boxed{\texttt{clk\_out} = \texttt{clk\_out1}\lor\texttt{clk\_out2}}
 \]
-
-在代码实现上：
-分别利用上升沿和下降沿更新信号 $A$、$B$，
-并提出在以下计数条件下翻转：
-\[
-\texttt{counter} = \frac{N-1}{2}-1.
-\]
-
+讲义说明文字中的“异或”与 Listing 4 不一致，此处依照代码采用或运算。
 
 \subsubsection{时钟IP核}
 时钟IP虽然可以提供准确的时钟，但是需要一段时间来建立稳定的时钟关系。
-当状态信号$ locked = 1 $时，时钟才正式准备好。
+当状态信号 $\texttt{clk\_gen\_locked}=1$ 时，表示 IP 已锁定。顶层按讲义直接将 $\texttt{sys\_rstn}$ 接到分频器；分析稳态波形时应选择复位解除且 IP 已锁定之后的区间。
 
 
 \subsubsection{testbench仿真平台}
@@ -146,13 +131,13 @@ T_{\mathrm{high}} = \frac{N}{2}T_{\mathrm{in}}.
 实验步骤如下：
 \begin{enumerate}
     \item 新建工程：器件型号按实验箱 FPGA（XC7K410T-2FFG900）选择；
-    \item 配置 Clocking Wizard IP：输入 25MHz，倍频输出 100MHz、200MHz（10MHz 可由 IP 核输出或分频模块生成）；
+    \item 配置 Clocking Wizard IP：输入 25MHz，输出 100MHz、10MHz、200MHz（保留工程已有的第三路输出）；
     \item 编写分频模块与顶层文件：100MHz→20MHz、10MHz→1KHz（计数器翻转法，参考讲义代码框架）；
     \item 添加约束文件：时钟约束 \texttt{create\_clock} + 引脚约束 \texttt{PACKAGE\_PIN}（25M 时钟引脚 C25，LVCMOS33）；
     \item 行为仿真：验证分频比与占空比（注意仿真时长是否足够）；
 \end{enumerate}
 
-预期可以观察到IP核产生的100MHz，20MHz，1KHz时钟信号，以及分频模块产生的100MHz，20MHz，1KHz时钟信号的频率均正确，占空比均为50\%。
+预期可观察到 IP 核产生的 100MHz、10MHz、200MHz 时钟，以及分频模块产生的 20MHz、1kHz 时钟；各输出的占空比均为 50\%。
 
 一些实验过程图展示：
 
@@ -170,44 +155,87 @@ T_{\mathrm{high}} = \frac{N}{2}T_{\mathrm{in}}.
 用到的代码：
 
 \begin{lstlisting}[style=vcode, caption={奇数分频模块（5 分频，占空比 50\%）}, label={lst:clk_div_odd}]
-`timescale 1ns / 1ps
 
-module clk_div_odd #(
-    parameter DIV_FACTOR = 5
-)(
-    input wire clk_in,
-    input wire sys_rstn,
-    output wire clk_out
+module clk_div_odd #
+(
+parameter DIV_FACTOR = 5
+)
+(
+clk_in,
+sys_rstn,
+clk_out
 );
-
-reg [31:0] counter;
-reg clk_pos;
-reg clk_neg;
-
-always @(posedge clk_in or negedge sys_rstn) begin
-    if (!sys_rstn) begin
-        counter <= 0;
-        clk_pos <= 0;
-    end
-    else begin
-        if (counter == DIV_FACTOR - 1)
-            counter <= 0;
-        else
-            counter <= counter + 1;
-
-        clk_pos <= (counter < (DIV_FACTOR - 1) / 2);
-    end
+// 端口定义
+input clk_in;
+input sys_rstn;
+output clk_out;
+// 变量定义
+reg clk_out1;
+reg clk_out2;
+reg [7:0] cnt_1;
+reg [7:0] cnt_2;
+// 系数定义
+localparam COUNT = DIV_FACTOR;
+// 模块1：下降沿触发的分频时钟
+always @ (negedge clk_in or negedge sys_rstn) begin
+if(!sys_rstn) begin
+clk_out1 <= 1'b0;
+cnt_1 <= 'b0;
 end
-
-always @(negedge clk_in or negedge sys_rstn) begin
-    if (!sys_rstn)
-        clk_neg <= 0;
-    else
-        clk_neg <= clk_pos;
+else begin
+if(clk_out1 == 1'b0) begin
+// 低电平的翻转时刻
+if(cnt_1 == COUNT/2) begin
+clk_out1 <= ~clk_out1;
+cnt_1 <= 'b0;
 end
-
-assign clk_out = clk_pos | clk_neg;
-
+else begin
+cnt_1 <= cnt_1 + 1;
+end
+end
+else if(clk_out1 == 1'b1) begin
+// 高电平的翻转时刻
+if(cnt_1 == COUNT/2 - 1) begin
+clk_out1 <= ~clk_out1;
+cnt_1 <= 'b0;
+end
+else begin
+cnt_1 <= cnt_1 + 1;
+end
+end
+end
+end
+// 模块2：上升沿触发的分频时钟
+always @ (posedge clk_in or negedge sys_rstn) begin
+if(!sys_rstn) begin
+clk_out2 <= 1'b0;
+cnt_2 <= 'b0;
+end
+else begin
+if(clk_out2 == 1'b0) begin
+// 低电平的翻转时刻
+if(cnt_2 == COUNT/2) begin
+clk_out2 <= ~clk_out2;
+cnt_2 <= 'b0;
+end
+else begin
+cnt_2 <= cnt_2 + 1;
+end
+end
+else if(clk_out2 == 1'b1) begin
+// 高电平的翻转时刻
+if(cnt_2 == COUNT/2 - 1) begin
+clk_out2 <= ~clk_out2;
+cnt_2 <= 'b0;
+end
+else begin
+cnt_2 <= cnt_2 + 1;
+end
+end
+end
+end
+// 取或逻辑
+assign clk_out = clk_out1 | clk_out2;
 endmodule
 \end{lstlisting}
 
@@ -215,38 +243,39 @@ endmodule
 
 
 \begin{lstlisting}[style=vcode, caption={偶数分频（占空比50\%）}, label={lst:clk_div_even}]
+
 module clk_div_even #
 (
-    parameter DIV_FACTOR = 10
+parameter DIV_FACTOR = 10
 )
 (
-    clk_in,
-    sys_rstn,
-    clk_out
+clk_in,
+sys_rstn,
+clk_out
 );
-
+// 端口定义
 input clk_in;
 input sys_rstn;
 output reg clk_out;
-
-reg [15:0] counter;
-
-localparam COUNT = (DIV_FACTOR >> 1);
-
+// 变量定义
+reg[15:0] counter;
+// 系数定义
+localparam COUNT = ((DIV_FACTOR) >> 1);
+// 模块1：通过计数进行电平翻转
 always @(posedge clk_in or negedge sys_rstn) begin
-    if (!sys_rstn) begin
-        counter <= 0;
-        clk_out <= 0;
-    end
-    else if (counter == COUNT - 1) begin
-        clk_out <= ~clk_out;
-        counter <= 0;
-    end
-    else begin
-        counter <= counter + 1;
-    end
+if(!sys_rstn) begin
+counter <= 0;
+clk_out <= 0;
 end
-
+// 分频即上升沿触发计数到COUNT时进行翻转
+else if(counter == COUNT - 1) begin
+clk_out <= ~clk_out;
+counter <= 0;
+end
+else begin
+counter <= counter + 1;
+end
+end
 endmodule
 \end{lstlisting}
 
@@ -265,7 +294,170 @@ create_clock -name sys_clk -period 40.000 [get_ports sys_clk]
 \end{lstlisting}
 
 
-\subsection{实验结果}
-% 【100_10_20MHz】
-% 【100_20_10_1k】
 
+
+以下顶层和测试平台沿用讲义 Listing 5、Listing 6 的结构。顶层仅增加工程已有的 200MHz 输出连接；仿真时按讲义运行至 10ms。
+
+\begin{lstlisting}[style=vcode, caption={顶层模块（保留200MHz输出）}, label={lst:top}]
+module top
+(
+sys_clk
+);
+// 端口定义
+input sys_clk;
+// 顶层模块的输入时钟为电路中晶振提供的25MHz时钟
+// 变量定义
+(*mark_debug = "true"*) wire clk_100M;
+(*mark_debug = "true"*) wire clk_10M;
+(*mark_debug = "true"*) wire clk_20M;
+(*mark_debug = "true"*) wire clk_1K;
+(*mark_debug = "true"*) wire sys_rstn;
+(*mark_debug = "true"*) wire clk_gen_locked;
+(*mark_debug = "true"*) wire clk_200M; // 保留工程已有的第三路IP输出
+reg [15:0] cnt = 0;
+// 系数定义
+parameter RST_COUNT = 16'd25_000;
+// 复位信号持续时间为25MHz时钟上升沿计数25000次，即1ms
+parameter DIV_EVEN_FACTOR = 16'd10_000; // 10M分频至1K
+parameter DIV_ODD_FACTOR = 16'd5;
+// 100M分频至20M
+// 自定义生成复位信号
+always @(posedge sys_clk) begin
+if(cnt <= RST_COUNT)begin
+cnt <= cnt + 1;
+end
+else begin
+cnt <= cnt;
+end
+end
+assign sys_rstn = (cnt >= RST_COUNT);
+// 例化IP核进行基础倍频和分频
+clk_wiz_0 u1_clk_gen
+(
+.reset(~sys_rstn),
+.clk_in1(sys_clk),
+.clk_out1(clk_100M),
+.clk_out2(clk_10M),
+.clk_out3(clk_200M),
+.locked(clk_gen_locked)
+);
+// 例化分频模块
+clk_div_even #(.DIV_FACTOR(DIV_EVEN_FACTOR)) u2_clk_div_even
+(
+.clk_in(clk_10M),
+.sys_rstn(sys_rstn),
+.clk_out(clk_1K)
+);
+clk_div_odd #(.DIV_FACTOR(DIV_ODD_FACTOR)) u3_clk_div_odd
+(
+.clk_in(clk_100M),
+.sys_rstn(sys_rstn),
+.clk_out(clk_20M)
+);
+endmodule
+\end{lstlisting}
+
+\begin{lstlisting}[style=vcode, caption={测试平台（25MHz输入）}, label={lst:testbench}]
+`timescale 1ns / 1ps
+module testbench();
+// 系统时钟及复位
+reg sys_clk = 0;
+// 时钟模块时钟周期为40ns，频率为25MHz
+always @ * begin
+#20 sys_clk <= ~sys_clk;
+end
+top test_top(.sys_clk(sys_clk));
+endmodule
+\end{lstlisting}
+
+\subsection{实验结果}
+
+本实验采用 Vivado 行为仿真验证时钟生成与分频逻辑。
+测试平台提供周期为40ns的25MHz输入时钟，顶层产生约1ms的上电复位。
+以下截图均选取复位解除且时钟IP锁定后的稳定区间，分别观察高速时钟与低速时钟，
+避免因时间尺度不合适而无法辨认波形。
+
+\subsubsection{输入时钟与时钟输出总览}
+
+图\ref{fig:ex1_clock_overview}展示了输入时钟\texttt{sys\_clk}、
+IP输出\texttt{clk\_100M}和\texttt{clk\_10M}，以及分频输出\texttt{clk\_20M}。
+由时间刻度可观察到，四路信号的周期分别约为40ns、10ns、100ns和50ns，
+对应25MHz、100MHz、10MHz和20MHz，与设计目标一致。
+工程另配置了200MHz的IP输出，该信号的配置见前文IP设置图，本张波形图未显示该路信号。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/100_10_20Mclock.jpg}
+    \caption{输入25MHz时钟及100MHz、10MHz、20MHz时钟的稳定波形}
+    \label{fig:ex1_clock_overview}
+\end{figure}
+
+\subsubsection{奇数5分频的仿真结果}
+
+图\ref{fig:ex1_odd_div5}依次显示100MHz输入时钟\texttt{clk\_100M}、
+20MHz输出时钟\texttt{clk\_20M}，以及模块内部的
+\texttt{clk\_out1}、\texttt{clk\_out2}。
+两支路分别在输入时钟的下降沿和上升沿更新，每路高电平持续2个输入周期，
+低电平持续3个输入周期，且两路边沿相差半个输入周期，即5ns。
+两支路取或后，高电平和低电平均持续2.5个输入周期，即25ns，实现50\%占空比。
+
+图\ref{fig:ex1_odd_div5}上图的两个游标位于\texttt{clk\_20M}的相邻上升沿，
+对应时刻为1\,069\,440ns与1\,069\,490ns，差值为50ns。因此
+\[
+T_{\mathrm{odd}}=50\mathrm{ns},\qquad
+f_{\mathrm{odd}}=\frac{1}{50\mathrm{ns}}=20\mathrm{MHz},\qquad
+\frac{f_{\mathrm{in}}}{f_{\mathrm{odd}}}=\frac{100}{20}=5.
+\]
+下图将游标分别放在同一高电平的上升沿和下降沿，
+对应时刻为1\,069\,440ns与1\,069\,465ns，测得高电平宽度为25ns。
+结合周期测量可得
+\[
+D_{\mathrm{odd}}=\frac{T_{\mathrm{high}}}{T_{\mathrm{odd}}}\times100\%
+=\frac{25\mathrm{ns}}{50\mathrm{ns}}\times100\%=50\%.
+\]
+因此输出周期和占空比均由游标测量验证，符合奇数5分频的设计要求。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{figures/odd_div5_waveform.png}\\[0.6em]
+    \includegraphics[width=0.90\textwidth]{figures/odd_div5_high.png}
+    \caption{奇数5分频的周期与占空比测量：上图周期50ns，下图高电平宽度25ns}
+    \label{fig:ex1_odd_div5}
+\end{figure}
+
+\subsubsection{偶数10000分频的仿真结果}
+
+图\ref{fig:ex1_even_div10000}显示10MHz输入时钟\texttt{clk\_10M}
+和1kHz输出时钟\texttt{clk\_1K}。
+分频系数取10000，计数器从0计至4999时将输出翻转并清零，
+每5000个输入周期翻转一次。因此高、低电平各持续
+\[
+5000\times\frac{1}{10\mathrm{MHz}}=0.5\mathrm{ms}.
+\]
+
+图\ref{fig:ex1_even_div10000}上图的游标位于\texttt{clk\_1K}的相邻上升沿，
+对应时刻为1502.120$\mu$s与2502.120$\mu$s，间隔为1000$\mu$s，故
+\[
+T_{\mathrm{even}}=1000\mu\mathrm{s}=1\mathrm{ms},\qquad
+f_{\mathrm{even}}=\frac{1}{1\mathrm{ms}}=1\mathrm{kHz}.
+\]
+下图游标分别位于1502.120$\mu$s的上升沿与2002.120$\mu$s的下降沿，
+测得高电平宽度为500$\mu$s，因此
+\[
+D_{\mathrm{even}}=\frac{500\mu\mathrm{s}}{1000\mu\mathrm{s}}\times100\%=50\%.
+\]
+周期与高电平宽度的测量共同验证了10000分频和50\%占空比。
+在毫秒级时间尺度下，10MHz输入时钟的周期仅为0.1$\mu$s，
+大量周期压缩在同一画面中，因而呈现为密集的绿色条带；这是显示尺度造成的正常现象。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{figures/even_div10000_waveform.png}\\[0.6em]
+    \includegraphics[width=0.90\textwidth]{figures/even_div10000_high.png}
+    \caption{偶数10000分频的周期与占空比测量：上图周期1000$\mu$s，下图高电平宽度500$\mu$s}
+    \label{fig:ex1_even_div10000}
+\end{figure}
+
+综合以上结果，25MHz输入时钟经IP生成所需基础时钟后，
+奇数分频模块输出20MHz、偶数分频模块输出1kHz，
+分频比和稳态占空比均符合实验要求。
