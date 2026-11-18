@@ -1,48 +1,60 @@
-
-本小节做的实验是为了把通过实验1验证的代码部署到实际的FPGA开发板上，即实验目的为： 熟悉使用 Vivado 进行硬件开发的步骤，了解综合、布线、在线调试的全过程。
-
-
-
-
+本实验将实验 1 验证的时钟电路部署到 XC7K410T FPGA，使用 Vivado 完成实现、比特流生成和 JTAG 下载，并用 ILA 观测各路时钟。
 
 \subsection{实验原理}
-\subsubsection{ILA测试}
-ILA可以用来观测FPGA内部信号，其核心在于利用一个定时器来截获特定的信号，
-即采样，当采样频率不够（未高于采样频率的2倍），则会产生失真，或者说我们采样到信号波形不能充分表征原始的信号。相反，采样频率升高的时候，采样观察边沿的时间分辨率就可以提高。
-但如果只是提高采样频率，而不提高记录的时长，最后也可能导致想看的波形被截断而不能得到充分的观察，
-我们需要去同时考虑采样点数的失真效应和记录时长带来的截断效应。
-采样点数$ N_{sample} $，采样间隔$ T_{inter} $和记录时长$ T_{all} $有着如下的关系：
+\subsubsection{ILA 测试}
+ILA 以采样时钟记录 FPGA 内部探针的逻辑值。采样频率 $f_s$、采样间隔 $T_{\mathrm{inter}}$ 和 $N_{\mathrm{sample}}$ 点的记录窗口 $T_{\mathrm{all}}$ 满足
 \[
-\frac{N_{sample}}{T_{inter}} = T_{all}
+    T_{\mathrm{inter}}=\frac{1}{f_s},
+    \qquad T_{\mathrm{all}}=N_{\mathrm{sample}}T_{\mathrm{inter}} .
 \]
-
-而在本次实验中，ILA的使用步骤为
-\begin{enumerate}
-    \item 在 IP Catalog 中搜索并添加 ILA IP，设置采样时钟与探针数量、位宽（Probes）；
-    \item 在顶层将待观测信号（\texttt{clk\_100M}、\texttt{clk\_20M}、texttt{clk\_10M}、texttt{clk\_1k}）接入 ILA 探针，采样时钟选用 200MHz；
-    \item 重新综合、实现并生成比特流，按上板流程下载；
-    \item 在 Hardware Manager 中设置触发条件（如信号上升沿），点击运行按钮捕获波形。
-\end{enumerate}
-
+设相邻两个上升沿之间有 $N_{\mathrm{period}}$ 个采样间隔，其中 $N_{\mathrm{high}}$ 个样点为高电平，则可用 $N_{\mathrm{period}}T_{\mathrm{inter}}$ 测量周期，用 $N_{\mathrm{high}}/N_{\mathrm{period}}$ 估算占空比。提高采样频率可以细化边沿的时间分辨率，记录深度固定时也会缩短记录窗口。
 
 \subsection{实验过程}
-实验步骤如下：
 \begin{enumerate}
-    \item 完成综合、实现后，点击 Generate Bitstream 生成比特流文件（.bit）；
-    \item 用 USB 下载器连接实验箱 JTAG 接口，接通电源（注意单排针方向，勿带电插拔）；
-    \item 打开 Hardware Manager → Open Target → Auto Connect 连接 FPGA；
-    \item 右键器件 → Program Device，选择 .bit 文件完成下载；
-    \item 下载成功后观察板上现象，配合 ILA 波形验证各路时钟是否正确。
+    \item 将板载 25\,MHz 时钟接入 C25 引脚。Clocking Wizard 产生 100\,MHz、200\,MHz 和 10\,MHz，100\,MHz 经五分频得到 20\,MHz，10\,MHz 经一万分频得到 1\,kHz。
+    \item 在 Vivado 中接入 ILA。200\,MHz ILA 的深度为 4096 点，采样间隔为 5\,ns，记录窗口为 20.48\,$\mu$s。探针接入 100\,MHz、20\,MHz、10\,MHz 和 1\,kHz 信号。
+    \item 完成实现并生成 \texttt{.bit} 与 \texttt{.ltx} 文件。布线后建立时间和保持时间的最差裕量分别为 $+2.306$\,ns 和 $+0.058$\,ns。通过 USB 下载器连接 JTAG，识别 XC7K410T 后下载比特流并关联探针文件。
+    \item 用 200\,MHz ILA 分别以 10\,MHz 和 1\,kHz 的上升沿触发，记录快时钟和 1\,kHz 上升沿。再用 10\,MHz ILA 采集 16\,384 点，取得 1.6384\,ms 的记录窗口，用于测量 1\,kHz 的完整周期。
 \end{enumerate}
 
-预期可以观察到：用ILA去观测产生的100MHz，20MHz，10MHz，1kHz的信号，其频率正确并且占空比为预期的50\%
-
-
-一些实验过程图展示：
-
-
-% \subsection{预期现象}
-% \input{imag.tex}
-
 \subsection{实验结果}
-\input{result.tex}
+表~\ref{tab:ex2-ila-clocks} 汇总了板上采样的测量结果。100\,MHz、20\,MHz、10\,MHz 的周期分别为 10\,ns、50\,ns、100\,ns，1\,kHz 的周期为 1\,ms。四路信号的样点占空比均为 50\%。
+
+\begin{table}[H]
+    \centering
+    \caption{板上时钟周期与样点占空比}
+    \label{tab:ex2-ila-clocks}
+    \begin{tabular}{lrrrrr}
+        \toprule
+        被测信号 & ILA 采样频率 & 周期样点 & 高电平样点 & 周期 & 样点占空比 \\
+        \midrule
+        100\,MHz & 200\,MHz & 2 & 1 & 10\,ns & 50\% \\
+         20\,MHz & 200\,MHz & 10 & 5 & 50\,ns & 50\% \\
+         10\,MHz & 200\,MHz & 20 & 10 & 100\,ns & 50\% \\
+          1\,kHz & 10\,MHz & 10\,000 & 5\,000 & 1\,ms & 50\% \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.94\linewidth]{sections/ex2/picture/ex2_200mhz_clocks.png}
+    \caption{Vivado 中的 200\,MHz ILA 波形截图，包含 100\,MHz、20\,MHz、10\,MHz 和 1\,kHz 探针。横轴为样点序号，每个间隔对应 5\,ns。}
+    \label{fig:ex2-fast-clocks}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.94\linewidth]{sections/ex2/picture/ex2_200mhz_1khz_edge.png}
+    \caption{Vivado 中的 1\,kHz 上升沿截图，ILA 采样频率为 200\,MHz，每个样点间隔为 5\,ns。}
+    \label{fig:ex2-1khz-edge}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.94\linewidth]{sections/ex2/picture/ex2_10mhz_1khz_period.png}
+    \caption{Vivado 中的 1\,kHz 完整周期截图。ILA 采样频率为 10\,MHz，每个样点间隔为 100\,ns。}
+    \label{fig:ex2-1khz-period}
+\end{figure}
+
+上述图片截自 Vivado 重新打开的板上 ILA 采样记录。横轴保留软件显示的样点序号。图~\ref{fig:ex2-fast-clocks} 中，100\,MHz 信号每周期仅有两个样点，高、低电平交替出现，占空比读数受 5\,ns 采样间隔限制。图~\ref{fig:ex2-1khz-edge} 的 200\,MHz 记录覆盖一个上升沿。图~\ref{fig:ex2-1khz-period} 的长记录覆盖两个相邻上升沿，可以计算 1\,kHz 信号的周期与占空比。
