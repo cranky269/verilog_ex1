@@ -42,3 +42,7 @@ desktop.ini
 # ---------- 临时文件 ----------
 *.tmp
 *.bak
+
+
+/main.pdf
+/经验.md

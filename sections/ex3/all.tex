@@ -1,10 +1,16 @@
-本实验在同一块 FPGA 上以 100\,MHz 和 200\,MHz 两种 ILA 采样频率观测同一个 10\,MHz 时钟，比较采样间隔和记录窗口。
+本实验在同一块 FPGA 上以 100\,MHz 和 200\,MHz 两种 ILA 采样频率观测同一个 10\,MHz 时钟，对比波形差异。
 
 \subsection{实验过程}
 两个 ILA 均采集 4096 点，以上升沿触发，触发位置设为第 128 个样点（从 0 计数）。在 Vivado 中分别打开两组板上 ILA 采样记录并截图。横轴为样点序号，两图的触发点均位于第 128 个样点。100\,MHz 和 200\,MHz 采样下，相邻样点分别对应 10\,ns 和 5\,ns。
 
 \subsection{实验结果}
 如表~\ref{tab:ex3-sampling} 和图~\ref{fig:ex3-ila-comparison} 所示，两组测得的信号周期均为 100\,ns，样点占空比均为 50\%。
+
+
+\subsection{验收指标}
+\begin{enumerate}
+    \item 二者的波形差异，边沿刻画程度描述，以及原因介绍
+\end{enumerate}
 
 \begin{table}[H]
     \centering

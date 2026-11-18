@@ -17,6 +17,12 @@ ILA 以采样时钟记录 FPGA 内部探针的逻辑值。采样频率 $f_s$、�
     \item 用 200\,MHz ILA 分别以 10\,MHz 和 1\,kHz 的上升沿触发，记录快时钟和 1\,kHz 上升沿。再用 10\,MHz ILA 采集 16\,384 点，取得 1.6384\,ms 的记录窗口，用于测量 1\,kHz 的完整周期。
 \end{enumerate}
 
+\subsection{验收方式}
+\begin{enumerate}
+    \item 100MHz 时钟：用 ILA（或示波器）观测频率与占空比是否与设置的一致；
+    \item 1KHz 时钟：用 ILA 观察，观测频率与占空比是否与设置的一致
+\end{enumerate}
+
 \subsection{实验结果}
 表~\ref{tab:ex2-ila-clocks} 汇总了板上采样的测量结果。100\,MHz、20\,MHz、10\,MHz 的周期分别为 10\,ns、50\,ns、100\,ns，1\,kHz 的周期为 1\,ms。四路信号的样点占空比均为 50\%。
 
