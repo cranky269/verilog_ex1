@@ -51,3 +51,9 @@ ILA 在每个采样时钟上升沿记录探针的逻辑电平。波形窗口的�
 \end{table}
 
 表~\ref{tab:ex2-ila-clocks} 中四路波形的周期均与设计值一致。100\,MHz 信号每周期只有一高一低两个样点，能辨认电平交替，但 5\,ns 的采样间隔限制了对其高电平宽度的测量精度。
+
+\subsection{验收方式}
+\begin{enumerate}
+    \item 100MHz 时钟：用 ILA（或示波器）观测频率与占空比是否与设置的一致；
+    \item 1KHz 时钟：用 ILA 观察，观测频率与占空比是否与设置的一致
+\end{enumerate}
