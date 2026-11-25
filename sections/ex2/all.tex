@@ -1,60 +1,53 @@
-本实验将实验 1 验证的时钟电路部署到 XC7K410T FPGA，使用 Vivado 完成实现、比特流生成和 JTAG 下载，并用 ILA 观测各路时钟。
+本实验将实验一的时钟电路下载到 XC7K410T FPGA，用 Vivado 的集成逻辑分析仪（ILA）测量四路时钟的周期和占空比。
 
 \subsection{实验原理}
-\subsubsection{ILA 测试}
-ILA 以采样时钟记录 FPGA 内部探针的逻辑值。采样频率 $f_s$、采样间隔 $T_{\mathrm{inter}}$ 和 $N_{\mathrm{sample}}$ 点的记录窗口 $T_{\mathrm{all}}$ 满足
+ILA 在每个采样时钟上升沿记录探针的逻辑电平。波形窗口的横轴为样点序号。设采样频率为 $f_s$，被测信号相邻上升沿相隔 $n$ 个采样间隔，其间有 $h$ 个高电平样点，则周期和占空比的估计值分别为
 \[
-    T_{\mathrm{inter}}=\frac{1}{f_s},
-    \qquad T_{\mathrm{all}}=N_{\mathrm{sample}}T_{\mathrm{inter}} .
+    T \approx \frac{n}{f_s}, \qquad D \approx \frac{h}{n}.
 \]
-设相邻两个上升沿之间有 $N_{\mathrm{period}}$ 个采样间隔，其中 $N_{\mathrm{high}}$ 个样点为高电平，则可用 $N_{\mathrm{period}}T_{\mathrm{inter}}$ 测量周期，用 $N_{\mathrm{high}}/N_{\mathrm{period}}$ 估算占空比。提高采样频率可以细化边沿的时间分辨率，记录深度固定时也会缩短记录窗口。
+对于固定的采样深度 $N$，采集窗口长度为 $N/f_s$。因此，快时钟需要较短的采样间隔，慢时钟则需要足够长的记录窗口。
 
 \subsection{实验过程}
 \begin{enumerate}
-    \item 将板载 25\,MHz 时钟接入 C25 引脚。Clocking Wizard 产生 100\,MHz、200\,MHz 和 10\,MHz，100\,MHz 经五分频得到 20\,MHz，10\,MHz 经一万分频得到 1\,kHz。
-    \item 在 Vivado 中接入 ILA。200\,MHz ILA 的深度为 4096 点，采样间隔为 5\,ns，记录窗口为 20.48\,$\mu$s。探针接入 100\,MHz、20\,MHz、10\,MHz 和 1\,kHz 信号。
-    \item 完成实现并生成 \texttt{.bit} 与 \texttt{.ltx} 文件。布线后建立时间和保持时间的最差裕量分别为 $+2.306$\,ns 和 $+0.058$\,ns。通过 USB 下载器连接 JTAG，识别 XC7K410T 后下载比特流并关联探针文件。
-    \item 用 200\,MHz ILA 分别以 10\,MHz 和 1\,kHz 的上升沿触发，记录快时钟和 1\,kHz 上升沿。再用 10\,MHz ILA 采集 16\,384 点，取得 1.6384\,ms 的记录窗口，用于测量 1\,kHz 的完整周期。
+    \item 将板载 25\,MHz 时钟从 C25 引脚接入 Clocking Wizard，产生 100\,MHz、10\,MHz 和 200\,MHz 时钟。将 100\,MHz 五分频得到 20\,MHz，将 10\,MHz 一万分频得到 1\,kHz。
+    \item 完成综合、实现和比特流生成后，通过 JTAG 在 Hardware Manager 中下载比特流并加载对应的探针文件。图~\ref{fig:ex2-fast-clocks} 左侧显示目标器件 \texttt{xc7k410t\_0} 的状态为 \texttt{Programmed}。
+    \item 用 200\,MHz ILA 同时采集四路信号，深度为 4096 点。另用 10\,MHz ILA 以 1\,kHz 信号的上升沿为触发条件，采集 16\,384 点，使一个完整的慢时钟周期落在记录内。
 \end{enumerate}
 
 \subsection{实验结果}
-表~\ref{tab:ex2-ila-clocks} 汇总了板上采样的测量结果。100\,MHz、20\,MHz、10\,MHz 的周期分别为 10\,ns、50\,ns、100\,ns，1\,kHz 的周期为 1\,ms。四路信号的样点占空比均为 50\%。
+图~\ref{fig:ex2-fast-clocks} 中，前三行依次为 100\,MHz、20\,MHz 和 10\,MHz。在相邻两个刻度 4040 与 4050 之间有 10 个采样间隔，对应 50\,ns。100\,MHz 在这段时间内经过五个周期，20\,MHz 经过一个周期，10\,MHz 经过半个周期。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{sections/ex2/picture/board_200mhz.png}
+    \caption{200\,MHz ILA 同步采集的四路时钟，横轴每个采样间隔为 5\,ns}
+    \label{fig:ex2-fast-clocks}
+\end{figure}
+
+图~\ref{fig:ex2-fast-clocks} 中最下方的 1\,kHz 探针在当前视图内持续为低电平。即使展开全部 4096 点，记录也仅覆盖 $20.48\,\mu\mathrm{s}$，而 1\,kHz 的一个周期为 1\,ms。图~\ref{fig:ex2-1khz-period} 改用 10\,MHz 采样，记录窗口延长到 1.6384\,ms。图中相邻两个上升沿相隔约 10\,000 个采样间隔，高电平约占其中一半。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{sections/ex2/picture/board_1khz.png}
+    \caption{10\,MHz ILA 采集的 1\,kHz 波形。有效记录共 16\,384 点，每点间隔 100\,ns}
+    \label{fig:ex2-1khz-period}
+\end{figure}
 
 \begin{table}[H]
     \centering
-    \caption{板上时钟周期与样点占空比}
+    \caption{根据板上波形估算的时钟周期和占空比}
     \label{tab:ex2-ila-clocks}
-    \begin{tabular}{lrrrrr}
+    \small
+    \begin{tabular}{lrrrr}
         \toprule
-        被测信号 & ILA 采样频率 & 周期样点 & 高电平样点 & 周期 & 样点占空比 \\
+        被测时钟 & 采样频率 & 每周期样点数 & 周期估计 & 占空比估计 \\
         \midrule
-        100\,MHz & 200\,MHz & 2 & 1 & 10\,ns & 50\% \\
-         20\,MHz & 200\,MHz & 10 & 5 & 50\,ns & 50\% \\
-         10\,MHz & 200\,MHz & 20 & 10 & 100\,ns & 50\% \\
-          1\,kHz & 10\,MHz & 10\,000 & 5\,000 & 1\,ms & 50\% \\
+        100\,MHz & 200\,MHz & 2 & 10\,ns & 约 50\% \\
+         20\,MHz & 200\,MHz & 10 & 50\,ns & 约 50\% \\
+         10\,MHz & 200\,MHz & 20 & 100\,ns & 约 50\% \\
+          1\,kHz & 10\,MHz & 约 10\,000 & 约 1\,ms & 约 50\% \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.94\linewidth]{sections/ex2/picture/ex2_200mhz_clocks.png}
-    \caption{Vivado 中的 200\,MHz ILA 波形截图，包含 100\,MHz、20\,MHz、10\,MHz 和 1\,kHz 探针。横轴为样点序号，每个间隔对应 5\,ns。}
-    \label{fig:ex2-fast-clocks}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.94\linewidth]{sections/ex2/picture/ex2_200mhz_1khz_edge.png}
-    \caption{Vivado 中的 1\,kHz 上升沿截图，ILA 采样频率为 200\,MHz，每个样点间隔为 5\,ns。}
-    \label{fig:ex2-1khz-edge}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.94\linewidth]{sections/ex2/picture/ex2_10mhz_1khz_period.png}
-    \caption{Vivado 中的 1\,kHz 完整周期截图。ILA 采样频率为 10\,MHz，每个样点间隔为 100\,ns。}
-    \label{fig:ex2-1khz-period}
-\end{figure}
-
-上述图片截自 Vivado 重新打开的板上 ILA 采样记录。横轴保留软件显示的样点序号。图~\ref{fig:ex2-fast-clocks} 中，100\,MHz 信号每周期仅有两个样点，高、低电平交替出现，占空比读数受 5\,ns 采样间隔限制。图~\ref{fig:ex2-1khz-edge} 的 200\,MHz 记录覆盖一个上升沿。图~\ref{fig:ex2-1khz-period} 的长记录覆盖两个相邻上升沿，可以计算 1\,kHz 信号的周期与占空比。
+表~\ref{tab:ex2-ila-clocks} 中四路波形的周期均与设计值一致。100\,MHz 信号每周期只有一高一低两个样点，能辨认电平交替，但 5\,ns 的采样间隔限制了对其高电平宽度的测量精度。
